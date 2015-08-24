@@ -2,19 +2,6 @@
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "location": {
-      "type": "string",
-      "allowedValues": [ 
-        "West US",
-        "East US",
-        "West Europe",
-        "East Asia",
-        "Southeast Asia"
-      ],
-      "metadata": {
-        "description": "The region to deploy the resources into"
-      }
-    },
     "newStorageAccountName": {
       "type": "string",
       "metadata": {
@@ -35,17 +22,18 @@
       },
       "defaultValue": "Standard_LRS"
     },
-    "storageAccountNewOrExisting" : {
+    "location": {
       "type": "string",
-      "defaultValue" : "new",
-      "allowedValues" : [
-        "new",
-        "existing"
-      ]
-    },
-    "storageAccountExistingRG" : {
-      "type" : "string",
-      "defaultValue" : ""
+      "allowedValues": [
+        "West US",
+        "East US",
+        "West Europe",
+        "East Asia",
+        "Southeast Asia"
+      ],
+      "metadata": {
+        "description": "The region to deploy the resources into"
+      }
     },
     "virtualNetworkName": {
       "type": "string",
@@ -110,11 +98,16 @@
       },
       "defaultValue": "adpublicIP"
     },
-    "dnsPrefix": {
+    "publicIPAddressType": {
       "type": "string",
+      "allowedValues": [
+        "Dynamic",
+        "Static"
+      ],
       "metadata": {
-        "description": "The DNS prefix for the public IP address used by the Load Balancer"
-      }
+        "description": "The type of the public IP address used by the Load Balancer"
+      },
+      "defaultValue": "Dynamic"
     },
     "adPDCVMName": {
       "type": "string",
@@ -168,12 +161,46 @@
       },
       "defaultValue": "Standard_D2"
     },
+    "imagePublisher": {
+      "type": "string",
+      "defaultValue": "MicrosoftWindowsServer",
+      "metadata": {
+        "description": "Image Publisher"
+      }
+    },
+    "imageOffer": {
+      "type": "string",
+      "defaultValue": "WindowsServer",
+      "metadata": {
+        "description": "Image Offer"
+      }
+    },
+    "imageSKU": {
+      "type": "string",
+      "defaultValue": "2012-R2-Datacenter",
+      "metadata": {
+        "description": "Image SKU"
+      }
+    },
+    "adAvailabilitySetName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the availability set that the AD VM is created in"
+      },
+      "defaultValue": "adAvailabiltySet"
+    },
     "domainName": {
       "type": "string",
       "metadata": {
         "description": "The FQDN of the AD Domain created "
       },
       "defaultValue": "adarmtest.com"
+    },
+    "dnsPrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "The DNS prefix for the public IP address used by the Load Balancer"
+      }
     },
     "pdcRDPPort": {
       "type": "int",
@@ -194,7 +221,7 @@
       "metadata": {
         "description": "The location of resources such as templates and DSC modules that the script is dependent"
       },
-      "defaultValue": "https://raw.githubusercontent.com/VybavaRamadoss/samples/master/active-directory-new-domain-ha-2-dc"
+      "defaultValue": "https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/active-directory-new-domain-ha-2-dc"
     }
   },
   "variables": {
@@ -202,7 +229,6 @@
     "adLBBE": "LBBE",
     "adPDCRDPNAT": "adPDCRDP",
     "adBDCRDPNAT": "adBDCRDP",
-    "adAvailabilitySetName": "adAvailabiltySet",
     "VnetID": "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]",
     "adSubnetRef": "[concat(variables('VnetID'),'/subnets/',parameters('adSubnetName'))]",
     "adPDCNicId": "[resourceId('Microsoft.Network/networkInterfaces',parameters('adPDCNicName'))]",
@@ -222,36 +248,18 @@
     "nicTemplateUri": "[concat(parameters('AssetLocation'),'/nic.json')]",
     "vnetwithDNSTemplateUri": "[concat(parameters('AssetLocation'),'/vnet-with-dns-server.json')]",
     "adPDCModulesURL": "[concat(parameters('AssetLocation'),'/CreateADPDC.ps1.zip')]",
-    "adPDCConfigurationFunction": "CreateADPDC.ps1\CreateADPDC",
+    "adPDCConfigurationFunction": "CreateADPDC.ps1\\CreateADPDC",
     "adBDCModulesURL": "[concat(parameters('AssetLocation'),'/CreateADBDC.ps1.zip')]",
-    "adBDCConfigurationFunction": "CreateADBDC.ps1\CreateADBDC"
-    "storageAccountSetupURL" : "[concat(parameters('AssetLocation'),'/storageAccount-',parameters('storageAccountNewOrExisting'),'.json')]"
+    "adBDCConfigurationFunction": "CreateADBDC.ps1\\CreateADBDC"
   },
   "resources": [
     {
-      "name": "storageAcountSetup",
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion" : "2015-01-01",
-      "properties" : {
-        "mode": "Incremental",
-        "templateLink" : {
-          "uri" : "[variables('storageAccountSetupURL')]",
-          "contentVersion": "1.0.0.0"
-        },
-        "parameters" : {
-          "location": {
-            "value": "[parameters('location')]"
-          },
-          "storageAccountType": {
-            "value": "[parameters('storageAccountType')]"
-          },
-          "storageAccountName" : {
-            "value": "[parameters('newStorageAccountName')]"
-          },
-          "storageAccountExistingRG": {
-            "value": "[parameters('storageAccountExistingRG')]"
-          }
-        }
+      "type": "Microsoft.Storage/storageAccounts",
+      "name": "[parameters('newStorageAccountName')]",
+      "apiVersion": "2015-05-01-preview",
+      "location": "[parameters('location')]",
+      "properties": {
+        "accountType": "[parameters('storageAccountType')]"
       }
     },
     {
@@ -260,7 +268,7 @@
       "name": "[parameters('publicIPAddressName')]",
       "location": "[parameters('location')]",
       "properties": {
-        "publicIPAllocationMethod": "Dynamic",
+        "publicIPAllocationMethod": "[parameters('publicIPAddressType')]",
         "dnsSettings": {
           "domainNameLabel": "[parameters('dnsPrefix')]"
         }
@@ -333,7 +341,7 @@
                 "id": "[variables('adlbFEConfigID')]"
               },
               "protocol": "tcp",
-              "frontendPort": "[parameters('pdcRDPPort')]", 
+              "frontendPort": "[parameters('pdcRDPPort')]",
               "backendPort": 3389,
               "enableFloatingIP": false
             }
@@ -345,7 +353,7 @@
                 "id": "[variables('adlbFEConfigID')]"
               },
               "protocol": "tcp",
-              "frontendPort": "[parameters('bdcRDPPort')]", 
+              "frontendPort": "[parameters('bdcRDPPort')]",
               "backendPort": 3389,
               "enableFloatingIP": false
             }
@@ -358,7 +366,7 @@
       "type": "Microsoft.Network/networkInterfaces",
       "location": "[parameters('location')]",
       "dependsOn": [
-        "Microsoft.Resources/deployments/VNet", 
+        "Microsoft.Resources/deployments/VNet",
         "[concat('Microsoft.Network/loadBalancers/',variables('adLBName'))]"
       ],
       "apiVersion": "2015-05-01-preview",
@@ -392,7 +400,7 @@
       "type": "Microsoft.Network/networkInterfaces",
       "location": "[parameters('location')]",
       "dependsOn": [
-        "Microsoft.Resources/deployments/VNet", 
+        "Microsoft.Resources/deployments/VNet",
         "[concat('Microsoft.Network/loadBalancers/',variables('adLBName'))]"
       ],
       "apiVersion": "2015-05-01-preview",
@@ -446,9 +454,9 @@
         },
         "storageProfile": {
           "imageReference": {
-            "publisher": "MicrosoftWindowsServer",
-            "offer": "WindowsServer",
-            "sku": "2012-R2-Datacenter",
+            "publisher": "[parameters('imagePublisher')]",
+            "offer": "[parameters('imageOffer')]",
+            "sku": "[parameters('imageSKU')]",
             "version": "latest"
           },
           "osDisk": {
@@ -627,9 +635,9 @@
         },
         "storageProfile": {
           "imageReference": {
-            "publisher": "MicrosoftWindowsServer",
-            "offer": "WindowsServer",
-            "sku": "2012-R2-Datacenter",
+            "publisher": "[parameters('imagePublisher')]",
+            "offer": "[parameters('imageOffer')]",
+            "sku": "[parameters('imageSKU')]",
             "version": "latest"
           },
           "osDisk": {
